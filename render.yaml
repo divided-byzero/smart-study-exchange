@@ -56,13 +56,14 @@ services:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
 
-  - type: worker
+  - type: web
     name: smart-study-exchange-telegram-bot
     runtime: node
     plan: free
     rootDir: telegram-bot
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false

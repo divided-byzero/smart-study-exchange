@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const TelegramBot = require('node-telegram-bot-api');
 const { query } = require('./db');
 
@@ -9,6 +10,20 @@ if (!TOKEN) {
   console.error('❌ TELEGRAM_BOT_TOKEN is not set. The bot cannot start.');
   process.exit(1);
 }
+
+// Render's free tier only supports "web" services, not background workers.
+// This bot uses Telegram long-polling (no inbound webhook needed), so we just
+// need to bind a port and answer health checks to keep Render happy — the
+// actual bot logic below is unaffected.
+const PORT = process.env.PORT || 10000;
+http
+  .createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Smart Study Exchange Telegram bot is running.\n');
+  })
+  .listen(PORT, () => {
+    console.log(`🌐 Health check server listening on port ${PORT}`);
+  });
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 

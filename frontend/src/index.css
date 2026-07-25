@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  scrollbar-color: #26456F #0F1C2E;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-feature-settings: "ss01" on;
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md bg-teal-500 px-5 py-2.5 font-body font-semibold text-ink transition hover:bg-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400 disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-navy-600 bg-navy-800/60 px-5 py-2.5 font-body font-semibold text-parchment transition hover:border-teal-500 hover:text-teal-400 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 font-body text-sm text-parchment/70 transition hover:text-parchment focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-teal-400;
+  }
+  .card {
+    @apply rounded-lg border border-navy-700 bg-navy-900/70 backdrop-blur-sm;
+  }
+  .input {
+    @apply w-full rounded-md border border-navy-600 bg-navy-950/60 px-3.5 py-2.5 font-body text-parchment placeholder:text-parchment/40 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500;
+  }
+  .label {
+    @apply mb-1.5 block font-body text-sm font-medium text-parchment/70;
+  }
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full border border-navy-600 bg-navy-800 px-2.5 py-0.5 text-xs font-medium text-parchment/80;
+  }
+  .badge-ai {
+    @apply inline-flex items-center gap-1 rounded-full border border-amber/30 bg-amber/10 px-2.5 py-0.5 text-xs font-medium text-amber;
+  }
+}

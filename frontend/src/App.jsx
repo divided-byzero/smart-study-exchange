@@ -1,7 +1,10 @@
+import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar.jsx';
 import Footer from './components/Footer.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
+import ColdStartBanner from './components/ColdStartBanner.jsx';
+import api from './services/api';
 
 import Home from './pages/Home.jsx';
 import Login from './pages/Login.jsx';
@@ -21,8 +24,16 @@ import AdminDashboard from './pages/AdminDashboard.jsx';
 import NotFound from './pages/NotFound.jsx';
 
 export default function App() {
+  // Fire a silent warm-up ping as soon as the app loads, so Render's free-tier
+  // backend has a head start waking up before the person even submits a form.
+  // Failures here are expected/harmless (that's exactly the cold-start case).
+  useEffect(() => {
+    api.get('/health').catch(() => {});
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col">
+      <ColdStartBanner />
       <Navbar />
       <main className="flex-1">
         <Routes>

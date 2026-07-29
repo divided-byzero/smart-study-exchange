@@ -4,64 +4,64 @@
  * concrete vendor SDK, so the underlying LLM can be swapped by changing only
  * this file.
  *
- * Current concrete implementation: Google Gemini API (free tier available —
- * no credit card / prepaid credit required, unlike the Anthropic or OpenAI APIs).
- * Get a free key at https://aistudio.google.com/app/apikey
+ * Current concrete implementation: xAI's Grok API (OpenAI-compatible chat
+ * completions format). Get a key at https://console.x.ai
  */
 
-const API_KEY = process.env.GEMINI_API_KEY;
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-const EMBEDDING_MODEL = process.env.GEMINI_EMBEDDING_MODEL || 'text-embedding-004';
+const API_KEY = process.env.GROK_API_KEY;
+const MODEL = process.env.GROK_MODEL || 'grok-3-mini';
 
-const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+const BASE_URL = 'https://api.x.ai/v1';
 
 function ensureConfigured() {
   if (!API_KEY) {
-    const err = new Error('AI provider not configured: set GEMINI_API_KEY in the environment.');
+    const err = new Error('AI provider not configured: set GROK_API_KEY in the environment.');
     err.statusCode = 503;
     throw err;
   }
 }
 
 /**
- * Low-level call to Gemini's generateContent endpoint.
+ * Low-level call to Grok's OpenAI-compatible chat completions endpoint.
  */
-async function callGemini({ systemInstruction, userContent, maxOutputTokens = 1500 }) {
+async function callGrok({ systemInstruction, userContent, maxTokens = 1500 }) {
   ensureConfigured();
 
-  const url = `${BASE_URL}/models/${MODEL}:generateContent?key=${API_KEY}`;
+  const messages = [];
+  if (systemInstruction) messages.push({ role: 'system', content: systemInstruction });
+  messages.push({ role: 'user', content: userContent });
 
-  const body = {
-    contents: [{ role: 'user', parts: [{ text: userContent }] }],
-    generationConfig: { maxOutputTokens, temperature: 0.4 },
-  };
-  if (systemInstruction) {
-    body.systemInstruction = { parts: [{ text: systemInstruction }] };
-  }
-
-  const response = await fetch(url, {
+  const response = await fetch(`${BASE_URL}/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      messages,
+      max_tokens: maxTokens,
+      temperature: 0.4,
+    }),
   });
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    const err = new Error(`Gemini API request failed (${response.status}): ${errText.slice(0, 300)}`);
+    const err = new Error(`Grok API request failed (${response.status}): ${errText.slice(0, 300)}`);
     err.statusCode = response.status === 429 ? 429 : 502;
     throw err;
   }
 
   const data = await response.json();
-  const candidate = data.candidates?.[0];
+  const content = data.choices?.[0]?.message?.content;
 
-  if (!candidate) {
-    const err = new Error('Gemini returned no candidates (the response may have been blocked by safety filters).');
+  if (!content) {
+    const err = new Error('Grok returned no content in its response.');
     err.statusCode = 502;
     throw err;
   }
 
-  return (candidate.content?.parts || []).map((p) => p.text || '').join('\n').trim();
+  return content.trim();
 }
 
 function stripJsonFences(text) {
@@ -79,7 +79,7 @@ async function summarizeText(rawText, { title = 'Untitled' } = {}) {
 
   const userContent = `Summarize the following lecture/note material titled "${title}" into structured study notes:\n\n${rawText.slice(0, 30000)}`;
 
-  return callGemini({ systemInstruction, userContent, maxOutputTokens: 1500 });
+  return callGrok({ systemInstruction, userContent, maxTokens: 1500 });
 }
 
 /**
@@ -95,7 +95,7 @@ async function generateQuiz(sourceText, { count = 5 } = {}) {
 
   const userContent = `Generate exactly ${count} multiple-choice questions from this material:\n\n${sourceText.slice(0, 25000)}`;
 
-  const text = await callGemini({ systemInstruction, userContent, maxOutputTokens: 2000 });
+  const text = await callGrok({ systemInstruction, userContent, maxTokens: 2000 });
   const parsed = JSON.parse(stripJsonFences(text));
   return parsed.questions || [];
 }
@@ -111,7 +111,7 @@ async function evaluateAnswer(question, correctAnswer, studentAnswer) {
 
   const userContent = `Question: ${question}\nExpected answer: ${correctAnswer}\nStudent answer: ${studentAnswer}`;
 
-  const text = await callGemini({ systemInstruction, userContent, maxOutputTokens: 300 });
+  const text = await callGrok({ systemInstruction, userContent, maxTokens: 300 });
   return JSON.parse(stripJsonFences(text));
 }
 
@@ -126,37 +126,22 @@ async function predictBookPrice({ title, author, condition, department, original
 
   const userContent = `Title: ${title}\nAuthor: ${author || 'Unknown'}\nDepartment: ${department || 'Unknown'}\nCondition: ${condition}\nOriginal/list price if known: ${originalPrice || 'unknown'}`;
 
-  const text = await callGemini({ systemInstruction, userContent, maxOutputTokens: 200 });
+  const text = await callGrok({ systemInstruction, userContent, maxTokens: 200 });
   return JSON.parse(stripJsonFences(text));
 }
 
 /**
  * Generate a vector embedding for semantic search.
- * Uses Gemini's free embedding endpoint — same GEMINI_API_KEY as everything else,
- * so no separate Voyage AI account is needed. Falls back gracefully if not configured
- * (caller should catch and use keyword search instead).
+ *
+ * xAI does not currently offer a public embeddings endpoint, so this always
+ * throws — callers (searchStrategies.js) already catch this and fall back to
+ * Postgres keyword search automatically. Smart search will simply behave as
+ * keyword search until an embeddings-capable provider is configured.
  */
-async function generateEmbedding(text) {
-  ensureConfigured();
-
-  const url = `${BASE_URL}/models/${EMBEDDING_MODEL}:embedContent?key=${API_KEY}`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: `models/${EMBEDDING_MODEL}`,
-      content: { parts: [{ text: text.slice(0, 8000) }] },
-    }),
-  });
-
-  if (!response.ok) {
-    const errText = await response.text().catch(() => '');
-    throw new Error(`Gemini embeddings request failed (${response.status}): ${errText.slice(0, 300)}`);
-  }
-
-  const data = await response.json();
-  return data.embedding.values;
+async function generateEmbedding() {
+  const err = new Error('Embeddings not supported by the current AI provider (Grok/xAI). Falling back to keyword search.');
+  err.statusCode = 503;
+  throw err;
 }
 
 module.exports = {

@@ -11,7 +11,11 @@
  */
 
 const API_KEY = process.env.OPENROUTER_API_KEY;
-const MODEL = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
+// openrouter/free is OpenRouter's own auto-router: it automatically picks
+// whichever free model is currently available, instead of a hardcoded model
+// ID that can get delisted with little notice (this happens often on the
+// free tier — see https://openrouter.ai/collections/free-models).
+const MODEL = process.env.OPENROUTER_MODEL || 'openrouter/free';
 
 const BASE_URL = 'https://openrouter.ai/api/v1';
 

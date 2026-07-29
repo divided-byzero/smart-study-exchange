@@ -48,7 +48,7 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: meta-llama/llama-3.3-70b-instruct:free
+        value: openrouter/free
       - key: YOUTUBE_API_KEY
         sync: false
       - key: TELEGRAM_BOT_TOKEN

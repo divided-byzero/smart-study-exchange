@@ -4,27 +4,29 @@
  * concrete vendor SDK, so the underlying LLM can be swapped by changing only
  * this file.
  *
- * Current concrete implementation: xAI's Grok API (OpenAI-compatible chat
- * completions format). Get a key at https://console.x.ai
+ * Current concrete implementation: OpenRouter's free model tier
+ * (OpenAI-compatible chat completions format). Get a free key at
+ * https://openrouter.ai — no credit card required for :free models.
+ * Free tier limits: ~20 requests/minute, ~50 requests/day.
  */
 
-const API_KEY = process.env.GROK_API_KEY;
-const MODEL = process.env.GROK_MODEL || 'grok-3-mini';
+const API_KEY = process.env.OPENROUTER_API_KEY;
+const MODEL = process.env.OPENROUTER_MODEL || 'meta-llama/llama-3.3-70b-instruct:free';
 
-const BASE_URL = 'https://api.x.ai/v1';
+const BASE_URL = 'https://openrouter.ai/api/v1';
 
 function ensureConfigured() {
   if (!API_KEY) {
-    const err = new Error('AI provider not configured: set GROK_API_KEY in the environment.');
+    const err = new Error('AI provider not configured: set OPENROUTER_API_KEY in the environment.');
     err.statusCode = 503;
     throw err;
   }
 }
 
 /**
- * Low-level call to Grok's OpenAI-compatible chat completions endpoint.
+ * Low-level call to OpenRouter's OpenAI-compatible chat completions endpoint.
  */
-async function callGrok({ systemInstruction, userContent, maxTokens = 1500 }) {
+async function callOpenRouter({ systemInstruction, userContent, maxTokens = 1500 }) {
   ensureConfigured();
 
   const messages = [];
@@ -36,6 +38,9 @@ async function callGrok({ systemInstruction, userContent, maxTokens = 1500 }) {
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${API_KEY}`,
+      // OpenRouter requests these for free-tier usage attribution; harmless if generic.
+      'HTTP-Referer': process.env.CORS_ORIGINS?.split(',')[0] || 'https://smart-study-exchange.app',
+      'X-Title': 'Smart Study Exchange',
     },
     body: JSON.stringify({
       model: MODEL,
@@ -47,7 +52,7 @@ async function callGrok({ systemInstruction, userContent, maxTokens = 1500 }) {
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
-    const err = new Error(`Grok API request failed (${response.status}): ${errText.slice(0, 300)}`);
+    const err = new Error(`OpenRouter API request failed (${response.status}): ${errText.slice(0, 300)}`);
     err.statusCode = response.status === 429 ? 429 : 502;
     throw err;
   }
@@ -56,7 +61,7 @@ async function callGrok({ systemInstruction, userContent, maxTokens = 1500 }) {
   const content = data.choices?.[0]?.message?.content;
 
   if (!content) {
-    const err = new Error('Grok returned no content in its response.');
+    const err = new Error('OpenRouter returned no content in its response.');
     err.statusCode = 502;
     throw err;
   }
@@ -77,9 +82,9 @@ async function summarizeText(rawText, { title = 'Untitled' } = {}) {
     'structured study notes in Markdown with headings, bullet points, and bolded ' +
     'key terms. Keep it faithful to the source material — do not invent facts.';
 
-  const userContent = `Summarize the following lecture/note material titled "${title}" into structured study notes:\n\n${rawText.slice(0, 30000)}`;
+  const userContent = `Summarize the following lecture/note material titled "${title}" into structured study notes:\n\n${rawText.slice(0, 20000)}`;
 
-  return callGrok({ systemInstruction, userContent, maxTokens: 1500 });
+  return callOpenRouter({ systemInstruction, userContent, maxTokens: 1500 });
 }
 
 /**
@@ -93,9 +98,9 @@ async function generateQuiz(sourceText, { count = 5 } = {}) {
     '{"questions": [{"question_text": string, "options": [string, string, string, string], "correct_option": number}]}. ' +
     'correct_option is a zero-based index into options.';
 
-  const userContent = `Generate exactly ${count} multiple-choice questions from this material:\n\n${sourceText.slice(0, 25000)}`;
+  const userContent = `Generate exactly ${count} multiple-choice questions from this material:\n\n${sourceText.slice(0, 18000)}`;
 
-  const text = await callGrok({ systemInstruction, userContent, maxTokens: 2000 });
+  const text = await callOpenRouter({ systemInstruction, userContent, maxTokens: 2000 });
   const parsed = JSON.parse(stripJsonFences(text));
   return parsed.questions || [];
 }
@@ -111,7 +116,7 @@ async function evaluateAnswer(question, correctAnswer, studentAnswer) {
 
   const userContent = `Question: ${question}\nExpected answer: ${correctAnswer}\nStudent answer: ${studentAnswer}`;
 
-  const text = await callGrok({ systemInstruction, userContent, maxTokens: 300 });
+  const text = await callOpenRouter({ systemInstruction, userContent, maxTokens: 300 });
   return JSON.parse(stripJsonFences(text));
 }
 
@@ -126,20 +131,20 @@ async function predictBookPrice({ title, author, condition, department, original
 
   const userContent = `Title: ${title}\nAuthor: ${author || 'Unknown'}\nDepartment: ${department || 'Unknown'}\nCondition: ${condition}\nOriginal/list price if known: ${originalPrice || 'unknown'}`;
 
-  const text = await callGrok({ systemInstruction, userContent, maxTokens: 200 });
+  const text = await callOpenRouter({ systemInstruction, userContent, maxTokens: 200 });
   return JSON.parse(stripJsonFences(text));
 }
 
 /**
  * Generate a vector embedding for semantic search.
  *
- * xAI does not currently offer a public embeddings endpoint, so this always
- * throws — callers (searchStrategies.js) already catch this and fall back to
- * Postgres keyword search automatically. Smart search will simply behave as
- * keyword search until an embeddings-capable provider is configured.
+ * OpenRouter's free tier does not include an embeddings endpoint, so this
+ * always throws — callers (searchStrategies.js) already catch this and fall
+ * back to Postgres keyword search automatically. Smart search will simply
+ * behave as keyword search until an embeddings-capable provider is configured.
  */
 async function generateEmbedding() {
-  const err = new Error('Embeddings not supported by the current AI provider (Grok/xAI). Falling back to keyword search.');
+  const err = new Error('Embeddings not supported by the current AI provider (OpenRouter free tier). Falling back to keyword search.');
   err.statusCode = 503;
   throw err;
 }
